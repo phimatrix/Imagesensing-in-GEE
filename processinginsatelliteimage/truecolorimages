@@ -1,0 +1,11 @@
+
+
+// 1. True color
+Export.image.toDrive({
+  image: s2_median.select(['B4','B3','B2']),
+  description: 'S2_TrueColor_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
