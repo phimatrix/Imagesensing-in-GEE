@@ -9,3 +9,12 @@ Map.addLayer(
   {min: -1, max: 1, palette: ['red', 'yellow', 'green']},
   'Raw NDVI (with clouds)'
 );
+// 2. Raw NDVI (with clouds)
+Export.image.toDrive({
+  image: ndvi_raw,
+  description: 'NDVI_Raw_WithClouds_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
