@@ -1,0 +1,11 @@
+ 3. RAW NDVI (WITH CLOUDS)
+ ***************************************/
+var ndvi_raw = s2_median
+  .normalizedDifference(['B8', 'B4'])
+  .rename('NDVI_raw');
+
+Map.addLayer(
+  ndvi_raw,
+  {min: -1, max: 1, palette: ['red', 'yellow', 'green']},
+  'Raw NDVI (with clouds)'
+);
