@@ -16,3 +16,14 @@ function maskS2clouds(image) {
 
   return image.updateMask(cloud.and(cirrus).and(sclMask));
 }
+
+
+// 3. Cloud-masked RGB
+Export.image.toDrive({
+  image: s2_clean_median.select(['B4','B3','B2']),
+  description: 'S2_CloudMasked_RGB_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
