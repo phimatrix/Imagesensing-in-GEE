@@ -1,0 +1,11 @@
+* 5. APPLY CLOUD MASK
+ ***************************************/
+var s2_clean = s2.map(maskS2clouds);
+var s2_clean_median = s2_clean.median().clip(aoi);
+
+// Cloud-masked RGB
+Map.addLayer(
+  s2_clean_median,
+  {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000},
+  'Cloud-masked RGB (S2)'
+);
