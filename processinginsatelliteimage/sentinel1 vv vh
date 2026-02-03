@@ -1,4 +1,88 @@
- 7. SENTINEL-1 (SAR)
+/***************************************
+ * AOI
+ ***************************************/
+var aoi = table;   // imported shapefile
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {}, 'AOI');
+
+/***************************************
+ * SENTINEL-2 (OPTICAL)
+ ***************************************/
+var s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterBounds(aoi)
+  .filterDate('2023-06-01', '2023-07-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 80));
+
+var s2_median = s2.median().clip(aoi);
+
+// True color
+Map.addLayer(
+  s2_median,
+  {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000},
+  'True Color (S2)'
+);
+
+/***************************************
+ * RAW NDVI (WITH CLOUDS)
+ ***************************************/
+var ndvi_raw = s2_median
+  .normalizedDifference(['B8', 'B4'])
+  .rename('NDVI_raw');
+
+Map.addLayer(
+  ndvi_raw,
+  {min: -1, max: 1, palette: ['red', 'yellow', 'green']},
+  'Raw NDVI (with clouds)'
+);
+
+/***************************************
+ * CLOUD MASK FUNCTION (ROBUST)
+ ***************************************/
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+
+  var cloud = qa.bitwiseAnd(1 << 10).eq(0);
+  var cirrus = qa.bitwiseAnd(1 << 11).eq(0);
+
+  var scl = image.select('SCL');
+  var sclMask = scl.neq(3)   // cloud shadow
+    .and(scl.neq(7))
+    .and(scl.neq(8))
+    .and(scl.neq(9))
+    .and(scl.neq(10))
+    .and(scl.neq(11));
+
+  return image.updateMask(cloud.and(cirrus).and(sclMask));
+}
+
+/***************************************
+ * APPLY CLOUD MASK
+ ***************************************/
+var s2_clean = s2.map(maskS2clouds);
+var s2_clean_median = s2_clean.median().clip(aoi);
+
+// Cloud-masked RGB
+Map.addLayer(
+  s2_clean_median,
+  {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000},
+  'Cloud-masked RGB (S2)'
+);
+
+/***************************************
+ * CLEAN NDVI
+ ***************************************/
+var ndvi_clean = s2_clean_median
+  .normalizedDifference(['B8', 'B4'])
+  .rename('NDVI_clean');
+
+Map.addLayer(
+  ndvi_clean,
+  {min: -1, max: 1, palette: ['brown', 'yellow', 'green']},
+  'Cloud-masked NDVI'
+);
+
+/***************************************
+ * SENTINEL-1 (SAR)
  ***************************************/
 var s1 = ee.ImageCollection("COPERNICUS/S1_GRD")
   .filterBounds(aoi)
@@ -14,7 +98,103 @@ var vh = s1.select('VH').median().clip(aoi);
 Map.addLayer(vv, {min: -20, max: 0}, 'Sentinel-1 VV');
 Map.addLayer(vh, {min: -25, max: -5}, 'Sentinel-1 VH');
 
-/ 5. Sentinel-1 VV
+/***************************************
+ * SAR-BASED NDVI RECONSTRUCTION
+ ***************************************/
+
+// Use only cloud-free pixels for training
+var ndvi_mask = ndvi_clean.mask();
+
+var vv_masked = vv.updateMask(ndvi_mask);
+var vh_masked = vh.updateMask(ndvi_mask);
+
+var sar_masked = vv_masked.addBands(vh_masked);
+
+// Training samples
+var training = sar_masked
+  .addBands(ndvi_clean)
+  .sample({
+    region: aoi,
+    scale: 10,
+    numPixels: 5000,
+    geometries: false,
+    tileScale: 4
+  });
+
+print('Training sample size:', training.size());
+
+// Linear regression
+var regression = training.reduceColumns({
+  reducer: ee.Reducer.linearRegression({
+    numX: 2,
+    numY: 1
+  }),
+  selectors: ['VV', 'VH', 'NDVI_clean']
+});
+
+var coeffs = ee.Array(regression.get('coefficients'));
+
+// Apply model to full SAR image
+var sar_stack = vv.addBands(vh);
+
+var ndvi_reconstructed = sar_stack.expression(
+  'a * VV + b * VH + c', {
+    VV: sar_stack.select('VV'),
+    VH: sar_stack.select('VH'),
+    a: coeffs.get([0,0]),
+    b: coeffs.get([1,0]),
+    c: coeffs.get([2,0])
+}).rename('NDVI_reconstructed');
+
+Map.addLayer(
+  ndvi_reconstructed,
+  {min: -1, max: 1, palette: ['red', 'yellow', 'green']},
+  'Reconstructed NDVI (SAR)'
+);
+
+// ===== EXPORTS =====
+
+// 1. True color
+Export.image.toDrive({
+  image: s2_median.select(['B4','B3','B2']),
+  description: 'S2_TrueColor_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
+
+// 2. Raw NDVI (with clouds)
+Export.image.toDrive({
+  image: ndvi_raw,
+  description: 'NDVI_Raw_WithClouds_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
+
+// 3. Cloud-masked RGB
+Export.image.toDrive({
+  image: s2_clean_median.select(['B4','B3','B2']),
+  description: 'S2_CloudMasked_RGB_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
+
+// 4. Cloud-masked NDVI
+Export.image.toDrive({
+  image: ndvi_clean,
+  description: 'NDVI_CloudMasked_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
+
+// 5. Sentinel-1 VV
 Export.image.toDrive({
   image: vv,
   description: 'Sentinel1_VV_JunJul_2023',
