@@ -9,3 +9,13 @@ Map.addLayer(
   {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000},
   'Cloud-masked RGB (S2)'
 );
+
+// 4. Cloud-masked NDVI
+Export.image.toDrive({
+  image: ndvi_clean,
+  description: 'NDVI_CloudMasked_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
