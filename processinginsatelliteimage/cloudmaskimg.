@@ -1,0 +1,18 @@
+ * 4. CLOUD MASK FUNCTION
+ ***************************************/
+function maskS2clouds(image) {
+  var qa = image.select('QA60');
+
+  var cloud = qa.bitwiseAnd(1 << 10).eq(0);
+  var cirrus = qa.bitwiseAnd(1 << 11).eq(0);
+
+  var scl = image.select('SCL');
+  var sclMask = scl.neq(3)   // cloud shadow
+    .and(scl.neq(7))        // unclassified
+    .and(scl.neq(8))        // medium cloud
+    .and(scl.neq(9))        // high cloud
+    .and(scl.neq(10))       // cirrus
+    .and(scl.neq(11));      // snow
+
+  return image.updateMask(cloud.and(cirrus).and(sclMask));
+}
