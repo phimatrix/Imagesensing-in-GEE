@@ -1,4 +1,18 @@
+* 2. SENTINEL-2 (OPTICAL)
+ ***************************************/
+var s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterBounds(aoi)
+  .filterDate('2023-06-01', '2023-07-31')
+  .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 80));
 
+var s2_median = s2.median().clip(aoi);
+
+// True color
+Map.addLayer(
+  s2_median,
+  {bands: ['B4', 'B3', 'B2'], min: 0, max: 3000},
+  'True Color (S2)'
+);
 
 // 1. True color
 Export.image.toDrive({
