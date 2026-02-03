@@ -13,3 +13,23 @@ var vh = s1.select('VH').median().clip(aoi);
 
 Map.addLayer(vv, {min: -20, max: 0}, 'Sentinel-1 VV');
 Map.addLayer(vh, {min: -25, max: -5}, 'Sentinel-1 VH');
+
+/ 5. Sentinel-1 VV
+Export.image.toDrive({
+  image: vv,
+  description: 'Sentinel1_VV_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
+
+// 6. Sentinel-1 VH
+Export.image.toDrive({
+  image: vh,
+  description: 'Sentinel1_VH_JunJul_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
