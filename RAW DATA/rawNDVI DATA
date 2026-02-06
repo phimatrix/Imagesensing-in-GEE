@@ -10,7 +10,7 @@ Map.addLayer(aoi, {color:'red'}, 'AOI');
 /************* Sentinel-2 *************/
 var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
   .filterBounds(aoi)
-  .filterDate('2023-06-01', '2023-07-31');
+  .filterDate('2023-06-01', '2024-05-31');
 
 var s2_median = s2.median().clip(aoi);
 
