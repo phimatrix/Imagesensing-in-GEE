@@ -1,0 +1,36 @@
+var gride_372 = ee.FeatureCollection(
+  "projects/theta-arcana-484116-h7/assets/grid_372"
+);
+
+var aoi = gride_372;
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {color:'red'}, 'AOI');
+
+
+/************* Sentinel-2 *************/
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterBounds(aoi)
+  .filterDate('2023-06-01', '2023-07-31');
+
+var s2_median = s2.median().clip(aoi);
+
+/************* RAW NDVI *************/
+var ndvi_raw = s2_median
+  .normalizedDifference(['B8','B4'])
+  .rename('NDVI_raw');
+
+Map.addLayer(
+  ndvi_raw,
+  {min:-1, max:1, palette:['black','gray','white']},
+  'RAW NDVI'
+);
+
+/************* EXPORT *************/
+Export.image.toDrive({
+  image: ndvi_raw,
+  description: 'RAW_NDVI_JuneJuly_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
