@@ -1,0 +1,71 @@
+/***************************************
+ * 1. AOI
+ ***************************************/
+var gride_372 = ee.FeatureCollection(
+  "projects/theta-arcana-484116-h7/assets/grid_372"
+);
+var aoi = gride_372;
+
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {color:'red'}, 'AOI');
+
+/***************************************
+ * 2. Sentinel-2 Collection
+ ***************************************/
+var s2 = ee.ImageCollection('COPERNICUS/S2_SR_HARMONIZED')
+  .filterBounds(aoi)
+  .filterDate('2023-01-01', '2024-10-31');
+
+/***************************************
+ * 3. Function to export RAW NDVI
+ ***************************************/
+function exportMonthlyRawNDVI(startDateStr) {
+
+  var start = ee.Date(startDateStr);
+  var end   = start.advance(1, 'month');
+
+  var s2_month = s2
+    .filterDate(start, end)
+    .median()
+    .clip(aoi);
+
+  var ndvi_raw = s2_month
+    .normalizedDifference(['B8','B4'])
+    .rename('NDVI_raw')
+    .set('system:time_start', start.millis());
+
+  Export.image.toDrive({
+    image: ndvi_raw,
+    description: 'RAW_NDVI_' + start.format('YYYY_MM').getInfo(),
+    folder: 'MONTHLY_RAW_NDVI',
+    fileNamePrefix: 'RAW_NDVI_' + start.format('YYYY_MM').getInfo(),
+    region: aoi,
+    scale: 10,
+    crs: 'EPSG:4326',
+    maxPixels: 1e13
+  });
+}
+
+/***************************************
+ * 4. Period 1: Jan–Jun 2023
+ ***************************************/
+[
+  '2023-01-01',
+  '2023-02-01',
+  '2023-03-01',
+  '2023-04-01',
+  '2023-05-01',
+  '2023-06-01'
+].forEach(exportMonthlyRawNDVI);
+
+/***************************************
+ * 5. Period 2: May–Oct 2024
+ ***************************************/
+[
+  '2024-05-01',
+  '2024-06-01',
+  '2024-07-01',
+  '2024-08-01',
+  '2024-09-01',
+  '2024-10-01'
+].forEach(exportMonthlyRawNDVI);
