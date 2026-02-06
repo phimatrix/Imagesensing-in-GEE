@@ -1,0 +1,104 @@
+
+
+/***************************************
+ * 1. AOI
+ ***************************************/
+var gride_372 = ee.FeatureCollection(
+  "projects/theta-arcana-484116-h7/assets/grid_372"
+);
+var aoi = gride_372;
+
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {color:'red'}, 'AOI');
+
+/***************************************
+ * 2. SENTINEL-2 (cloud-free NDVI for training)
+ ***************************************/
+var s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterBounds(aoi)
+  .filterDate('2023-06-01','2023-07-31');
+
+function maskS2(image) {
+  var scl = image.select('SCL');
+  var mask = scl.neq(3)  // cloud shadow
+    .and(scl.neq(8))     // cloud
+    .and(scl.neq(9))
+    .and(scl.neq(10))
+    .and(scl.neq(11));
+  return image.updateMask(mask);
+}
+
+var s2_clean = s2.map(maskS2);
+var s2_median = s2_clean.median().clip(aoi);
+
+var ndvi_clean = s2_median
+  .normalizedDifference(['B8','B4'])
+  .rename('NDVI');
+
+Map.addLayer(
+  ndvi_clean,
+  {min:-0.2,max:0.8,palette:['black','gray','white']},
+  'Cloud-free NDVI'
+);
+
+/***************************************
+ * 3. SENTINEL-1 SAR
+ ***************************************/
+var s1 = ee.ImageCollection("COPERNICUS/S1_GRD")
+  .filterBounds(aoi)
+  .filterDate('2023-06-01','2023-07-31')
+  .filter(ee.Filter.eq('instrumentMode','IW'))
+  .filter(ee.Filter.eq('orbitProperties_pass','DESCENDING'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VV'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VH'));
+
+var vv = s1.select('VV').median().clip(aoi);
+var vh = s1.select('VH').median().clip(aoi);
+
+/***************************************
+ * 4. TRAIN MLR (VV, VH → NDVI)
+ ***************************************/
+var mask = ndvi_clean.mask();
+
+var training = vv.updateMask(mask)
+  .addBands(vh.updateMask(mask))
+  .addBands(ndvi_clean)
+  .sample({
+    region: aoi,
+    scale: 10,
+    numPixels: 5000,
+    tileScale: 4
+  });
+
+var regression = training.reduceColumns({
+  reducer: ee.Reducer.linearRegression({numX:2, numY:1}),
+  selectors: ['VV','VH','NDVI']
+});
+
+var coef = ee.Array(regression.get('coefficients'));
+print('MLR coefficients', coef);
+
+/***************************************
+ * 5. RECONSTRUCT NDVI FROM SAR
+ ***************************************/
+var ndvi_sar = vv.multiply(coef.get([0,0]))
+  .add(vh.multiply(coef.get([1,0])))
+  .rename('NDVI_SAR');
+
+Map.addLayer(
+  ndvi_sar,
+  {min:-0.2,max:0.8,palette:['black','gray','white']},
+  'SAR-Reconstructed NDVI'
+);
+
+/***************************************
+ * 6. EXPORT
+ ***************************************/
+Export.image.toDrive({
+  image: ndvi_sar,
+  description: 'FUSED_SAR_NDVI_JuneJuly_2023',
+  folder: 'GEE_Exports',
+  region: aoi,
+  scale: 10,
+  maxPixels: 1e13
+});
