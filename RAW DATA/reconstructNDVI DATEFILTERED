@@ -1,0 +1,123 @@
+/***************************************
+ * 1. AOI
+ ***************************************/
+var gride_372 = ee.FeatureCollection(
+  "projects/theta-arcana-484116-h7/assets/grid_372"
+);
+var aoi = gride_372;
+
+Map.centerObject(aoi, 10);
+Map.addLayer(aoi, {color:'red'}, 'AOI');
+
+/***************************************
+ * 2. SENTINEL-2 (cloud-free NDVI for training)
+ ***************************************/
+var s2 = ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+  .filterBounds(aoi)
+  .filterDate('2023-06-01','2023-07-31');
+
+function maskS2(image) {
+  var scl = image.select('SCL');
+  var mask = scl.neq(3)
+    .and(scl.neq(8))
+    .and(scl.neq(9))
+    .and(scl.neq(10))
+    .and(scl.neq(11));
+  return image.updateMask(mask);
+}
+
+var ndvi_clean = s2
+  .map(maskS2)
+  .median()
+  .clip(aoi)
+  .normalizedDifference(['B8','B4'])
+  .rename('NDVI');
+
+/***************************************
+ * 3. SENTINEL-1 SAR (FULL RANGE)
+ ***************************************/
+var s1 = ee.ImageCollection("COPERNICUS/S1_GRD")
+  .filterBounds(aoi)
+  .filterDate('2023-01-01','2024-10-31')
+  .filter(ee.Filter.eq('instrumentMode','IW'))
+  .filter(ee.Filter.eq('orbitProperties_pass','DESCENDING'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VV'))
+  .filter(ee.Filter.listContains('transmitterReceiverPolarisation','VH'));
+
+/***************************************
+ * 4. TRAIN MLR (VV, VH → NDVI)
+ ***************************************/
+var training = s1
+  .filterDate('2023-06-01','2023-07-31')
+  .median()
+  .clip(aoi)
+  .select(['VV','VH'])
+  .addBands(ndvi_clean)
+  .sample({
+    region: aoi,
+    scale: 10,
+    numPixels: 5000,
+    tileScale: 4
+  });
+
+var regression = training.reduceColumns({
+  reducer: ee.Reducer.linearRegression({numX: 2, numY: 1}),
+  selectors: ['VV','VH','NDVI']
+});
+
+var coef = ee.Array(regression.get('coefficients'));
+print('MLR coefficients', coef);
+
+/***************************************
+ * 5. FUNCTION: EXPORT MONTHLY RECON NDVI
+ ***************************************/
+function exportMonthlyReconNDVI(dateStr) {
+
+  var start = ee.Date(dateStr);
+  var end   = start.advance(1, 'month');
+
+  var s1_month = s1
+    .filterDate(start, end)
+    .median()
+    .clip(aoi);
+
+  var ndvi_sar = s1_month.select('VV').multiply(coef.get([0,0]))
+    .add(s1_month.select('VH').multiply(coef.get([1,0])))
+    .rename('NDVI_SAR')
+    .set('system:time_start', start.millis());
+
+  Export.image.toDrive({
+    image: ndvi_sar,
+    description: 'RECON_NDVI_' + start.format('YYYY_MM').getInfo(),
+    folder: 'MONTHLY_RECON_NDVI',
+    fileNamePrefix: 'RECON_NDVI_' + start.format('YYYY_MM').getInfo(),
+    region: aoi,
+    scale: 10,
+    crs: 'EPSG:4326',
+    maxPixels: 1e13
+  });
+}
+
+/***************************************
+ * 6. PERIOD 1: Jan–Jun 2023
+ ***************************************/
+[
+  '2023-01-01',
+  '2023-02-01',
+  '2023-03-01',
+  '2023-04-01',
+  '2023-05-01',
+  '2023-06-01'
+].forEach(exportMonthlyReconNDVI);
+
+/***************************************
+ * 7. PERIOD 2: May–Oct 2024
+ ***************************************/
+[
+  '2024-05-01',
+  '2024-06-01',
+  '2024-07-01',
+  '2024-08-01',
+  '2024-09-01',
+  '2024-10-01'
+].forEach(exportMonthlyReconNDVI);
