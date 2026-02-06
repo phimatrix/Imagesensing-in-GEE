@@ -38,3 +38,5 @@ A collection of scripts and assets for image sensing and analysis using Google E
 2. Authenticate with Earth Engine (if using the CLI or API):
 3. earthengine authenticate
 4. Open an example script in scripts/ or notebooks/ and follow the comments to run processing tasks.
+
+after finding the different images we will find the raw data of NDVI and reconstructed fused NDVI data from fusion.py
