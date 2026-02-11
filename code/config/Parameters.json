@@ -1,0 +1,19 @@
+{
+    "AOI_NAME": "Nashik",
+    "PROJECT_TITLE": "SAR-OPT Fusion",
+    "GEE_USERNAME": "nrscdeveloper0",
+    "EXPORT_INPUT": false,
+    "EXPORT_RLR": false,
+    "EXPORT_PCA": true,
+    "CLEAR_EXISTING": false,
+    "OPTICAL_MISSION": "S2",
+    "START_DATE": "2023-06-01",
+    "END_DATE": "2023-07-31",
+    "PATH_MATADATA": null,
+    "TRAIN_TEST_SPLIT": 0.6,
+    "VAL_SPLIT": 0.2,
+    "RANDOM_SPLIT": true,
+    "PCA_SMOOTH": true,
+    "PCA_COMPONENT_RATIO": 0.1,
+    "STD_CLOUD_THRESHOLD": 50
+}
