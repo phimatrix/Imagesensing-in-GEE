@@ -1,0 +1,88 @@
+
+In this line:
+
+```javascript
+var s2_median = s2.median().clip(aoi);
+```
+
+### ✅ What `.median()` does
+
+`s2` is an **ImageCollection** (many Sentinel-2 images over time).
+
+`.median()`:
+
+* Computes the **pixel-wise median value**
+* Across **all images in the collection**
+* For **each band separately**
+
+So for every pixel location:
+
+* It takes all values from all dates
+* Sorts them
+* Picks the **middle value**
+
+This creates **one single image** from the whole collection.
+
+---
+
+### 📌 Example (for one pixel)
+
+If pixel values for Band B4 across time are:
+
+```
+1200, 1300, 1250, 8000 (cloud), 1280
+```
+
+Sorted:
+
+```
+1200, 1250, 1280, 1300, 8000
+```
+
+Median = **1280**
+
+So the cloudy outlier (8000) does not strongly affect the result.
+
+---
+
+### 🎯 Why median is commonly used
+
+* Reduces cloud contamination
+* Removes extreme outliers
+* Produces a "clean representative image"
+* Better than `.mean()` when data has spikes
+
+---
+
+### ⚠️ Important in Your Script
+
+You defined:
+
+```javascript
+var s2_median = s2.median().clip(aoi);
+```
+
+But you're **not actually using `s2_median` anywhere later**.
+
+Inside your monthly loop, you again do:
+
+```javascript
+.filterDate(start, end)
+.median()
+```
+
+So the first `s2_median` is currently unused and can be removed unless you plan to use it.
+
+---
+
+### 🔎 Summary
+
+| Function    | What it does                            |
+| ----------- | --------------------------------------- |
+| `.median()` | Converts ImageCollection → single Image |
+| Operation   | Pixel-wise median across time           |
+| Benefit     | Reduces cloud & outlier effects         |
+
+---
+
+If you want, I can also explain how `.median()` differs from `.mosaic()`, `.mean()`, and `.qualityMosaic()` — those differences are very important in Sentinel-2 processing.
